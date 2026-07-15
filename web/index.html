@@ -1,0 +1,404 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🚗 RC Patrol Control Center</title>
+    <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Arial, sans-serif;
+            background: #0a0a0a;
+            color: #fff;
+            overflow: hidden;
+        }
+        
+        .container {
+            display: grid;
+            grid-template-columns: 1fr 350px;
+            height: 100vh;
+            gap: 0;
+        }
+        
+        .video-panel {
+            background: #000;
+            display: flex;
+            flex-direction: column;
+            position: relative;
+        }
+        
+        .video-container {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: #1a1a1a;
+            position: relative;
+        }
+        
+        #video {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+        }
+        
+        .video-overlay {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            background: rgba(0,0,0,0.7);
+            padding: 10px 15px;
+            border-radius: 5px;
+            font-size: 14px;
+        }
+        
+        .status-dot {
+            display: inline-block;
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            margin-right: 8px;
+            animation: pulse 2s infinite;
+        }
+        
+        .status-dot.live {
+            background: #f44336;
+        }
+        
+        .status-dot.offline {
+            background: #666;
+            animation: none;
+        }
+        
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+        
+        .control-panel {
+            background: #1a1a1a;
+            padding: 20px;
+            overflow-y: auto;
+            border-left: 2px solid #333;
+        }
+        
+        .panel-section {
+            margin-bottom: 30px;
+            padding: 15px;
+            background: #252525;
+            border-radius: 10px;
+        }
+        
+        h1 {
+            font-size: 24px;
+            margin-bottom: 20px;
+            text-align: center;
+            color: #4CAF50;
+        }
+        
+        h2 {
+            font-size: 18px;
+            margin-bottom: 15px;
+            color: #aaa;
+            border-bottom: 1px solid #333;
+            padding-bottom: 8px;
+        }
+        
+        .status-display {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+            margin-bottom: 15px;
+        }
+        
+        .status-item {
+            background: #1a1a1a;
+            padding: 10px;
+            border-radius: 5px;
+            text-align: center;
+        }
+        
+        .status-label {
+            font-size: 12px;
+            color: #888;
+            margin-bottom: 5px;
+        }
+        
+        .status-value {
+            font-size: 20px;
+            font-weight: bold;
+            color: #4CAF50;
+        }
+        
+        .btn {
+            width: 100%;
+            padding: 15px;
+            margin: 5px 0;
+            font-size: 16px;
+            font-weight: bold;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.2s;
+            color: #fff;
+        }
+        
+        .btn:active {
+            transform: scale(0.95);
+        }
+        
+        .btn-stop {
+            background: #f44336;
+            font-size: 18px;
+            padding: 20px;
+        }
+        
+        .btn-stop:hover {
+            background: #d32f2f;
+        }
+        
+        .btn-up { background: #2196F3; }
+        .btn-down { background: #2196F3; }
+        .btn-left { background: #FF9800; }
+        .btn-right { background: #FF9800; }
+        
+        .btn-up:hover { background: #1976D2; }
+        .btn-down:hover { background: #1976D2; }
+        .btn-left:hover { background: #F57C00; }
+        .btn-right:hover { background: #F57C00; }
+        
+        .control-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr;
+            gap: 8px;
+            margin-top: 10px;
+        }
+        
+        .control-grid .btn {
+            padding: 30px 10px;
+            font-size: 24px;
+        }
+        
+        .center-btn {
+            grid-column: 2;
+        }
+        
+        .key-hints {
+            font-size: 12px;
+            color: #666;
+            text-align: center;
+            margin-top: 15px;
+            line-height: 1.6;
+        }
+        
+        .connection-status {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 10px;
+            background: #1a1a1a;
+            border-radius: 5px;
+            margin-bottom: 15px;
+        }
+        
+        .conn-item {
+            display: flex;
+            align-items: center;
+            font-size: 12px;
+        }
+        
+        .conn-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            margin-right: 6px;
+        }
+        
+        .conn-dot.connected { background: #4CAF50; }
+        .conn-dot.disconnected { background: #f44336; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Video Panel -->
+        <div class="video-panel">
+            <div class="video-container">
+                <video id="video" controls autoplay muted></video>
+                <div class="video-overlay">
+                    <span class="status-dot offline" id="streamStatus"></span>
+                    <span id="streamText">Waiting for GoPro stream...</span>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Control Panel -->
+        <div class="control-panel">
+            <h1>🚗 RC PATROL</h1>
+            
+            <!-- Connection Status -->
+            <div class="connection-status">
+                <div class="conn-item">
+                    <span class="conn-dot disconnected" id="arduinoStatus"></span>
+                    <span>Arduino</span>
+                </div>
+                <div class="conn-item">
+                    <span class="conn-dot disconnected" id="goProStatus"></span>
+                    <span>GoPro</span>
+                </div>
+            </div>
+            
+            <!-- Status Display -->
+            <div class="panel-section">
+                <h2>📊 Vehicle Status</h2>
+                <div class="status-display">
+                    <div class="status-item">
+                        <div class="status-label">STEERING</div>
+                        <div class="status-value" id="servoDisplay">90°</div>
+                    </div>
+                    <div class="status-item">
+                        <div class="status-label">THROTTLE</div>
+                        <div class="status-value" id="throttleDisplay">0%</div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Emergency Stop -->
+            <div class="panel-section">
+                <button class="btn btn-stop" onclick="sendCommand('Space')">
+                    ⏹ EMERGENCY STOP
+                </button>
+            </div>
+            
+            <!-- Controls -->
+            <div class="panel-section">
+                <h2>🎮 Controls</h2>
+                <div class="control-grid">
+                    <div></div>
+                    <button class="btn btn-up" onclick="sendCommand('ArrowUp')">▲</button>
+                    <div></div>
+                    
+                    <button class="btn btn-left" onclick="sendCommand('ArrowLeft')">◀</button>
+                    <button class="btn btn-down center-btn" onclick="sendCommand('ArrowDown')">▼</button>
+                    <button class="btn btn-right" onclick="sendCommand('ArrowRight')">▶</button>
+                </div>
+                
+                <div class="key-hints">
+                    💡 Use arrow keys on keyboard<br>
+                    ↑↓ Speed | ←→ Steering | Space = Stop
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        // Arduino control
+        const ARDUINO_IP = 'http://192.168.1.42'; // Update with your Arduino IP
+        let currentServo = 90;
+        let currentThrottle = 1000;
+        
+        async function sendCommand(key) {
+            try {
+                const response = await fetch(`${ARDUINO_IP}/key?code=${key}`, {
+                    method: 'GET',
+                    mode: 'cors'
+                });
+                
+                if (response.ok) {
+                    updateStatus();
+                    document.getElementById('arduinoStatus').className = 'conn-dot connected';
+                }
+            } catch (error) {
+                console.error('Arduino connection error:', error);
+                document.getElementById('arduinoStatus').className = 'conn-dot disconnected';
+            }
+        }
+        
+        async function updateStatus() {
+            // Update display based on local tracking
+            // You could also fetch actual values from Arduino if you add an endpoint
+            document.getElementById('servoDisplay').textContent = currentServo + '°';
+            const throttlePercent = Math.round((currentThrottle - 1000) / 10);
+            document.getElementById('throttleDisplay').textContent = throttlePercent + '%';
+        }
+        
+        // Keyboard controls
+        document.addEventListener('keydown', (e) => {
+            if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', ' '].includes(e.key)) {
+                e.preventDefault();
+                const keyCode = e.key === ' ' ? 'Space' : e.code;
+                sendCommand(keyCode);
+                
+                // Update local tracking
+                if (keyCode === 'ArrowUp') currentThrottle = Math.min(2000, currentThrottle + 50);
+                if (keyCode === 'ArrowDown') currentThrottle = Math.max(1000, currentThrottle - 50);
+                if (keyCode === 'ArrowLeft') currentServo = Math.max(0, currentServo - 27);
+                if (keyCode === 'ArrowRight') currentServo = Math.min(180, currentServo + 27);
+                if (keyCode === 'Space') { currentThrottle = 1000; currentServo = 90; }
+            }
+        });
+        
+        // GoPro HLS stream
+        const video = document.getElementById('video');
+        const streamUrl = 'http://localhost:8080/hls/.m3u8'; // GoPro using empty stream key
+        
+        function initStream() {
+            if (Hls.isSupported()) {
+                const hls = new Hls({
+                    enableWorker: true,
+                    lowLatencyMode: true,
+                    backBufferLength: 0,
+                    maxBufferLength: 1,          // Aggressive: 1 second max buffer
+                    maxMaxBufferLength: 2,
+                    liveSyncDurationCount: 1,
+                    liveMaxLatencyDurationCount: 2,
+                    liveDurationInfinity: true,
+                    highBufferWatchdogPeriod: 1
+                });
+                
+                hls.loadSource(streamUrl);
+                hls.attachMedia(video);
+                
+                hls.on(Hls.Events.MANIFEST_PARSED, () => {
+                    video.play();
+                    document.getElementById('streamStatus').className = 'status-dot live';
+                    document.getElementById('streamText').textContent = 'LIVE - GoPro Hero 11';
+                    document.getElementById('goProStatus').className = 'conn-dot connected';
+                });
+                
+                hls.on(Hls.Events.ERROR, (event, data) => {
+                    if (data.fatal) {
+                        console.error('HLS error:', data);
+                        document.getElementById('streamStatus').className = 'status-dot offline';
+                        document.getElementById('streamText').textContent = 'Stream disconnected';
+                        document.getElementById('goProStatus').className = 'conn-dot disconnected';
+                        
+                        // Retry after 3 seconds
+                        setTimeout(initStream, 3000);
+                    }
+                });
+            } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
+                // Native HLS support (Safari)
+                video.src = streamUrl;
+                video.addEventListener('loadedmetadata', () => {
+                    video.play();
+                    document.getElementById('streamStatus').className = 'status-dot live';
+                    document.getElementById('streamText').textContent = 'LIVE - GoPro Hero 11';
+                    document.getElementById('goProStatus').className = 'conn-dot connected';
+                });
+            }
+        }
+        
+        // Initialize stream on load
+        initStream();
+        
+        // Periodic status update
+        setInterval(updateStatus, 1000);
+    </script>
+</body>
+</html>
