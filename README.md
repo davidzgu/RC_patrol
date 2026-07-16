@@ -1,25 +1,34 @@
 # 🚗 RC Patrol - Indoor Pet Monitor & Security Camera
 
-Transform an RC car into a WiFi-controlled pet monitor with live GoPro Hero 11 Black camera streaming.
+Transform an RC car into a WiFi-controlled pet monitor with **ultra-low latency WebRTC streaming** from GoPro Hero 11 Black.
 
 ## 🎯 Project Overview
 
 - **Arduino Nano ESP32**: Controls servo (steering) and ESC (motor) via WiFi
-- **GoPro Hero 11 Black**: Live RTMP video streaming
+- **GoPro Hero 11 Black**: Live RTMP → WebRTC video streaming
+- **MediaMTX Server**: Sub-second latency WebRTC conversion (**0.2-0.5s lag**)
 - **Web Control Interface**: Unified dashboard for driving and viewing
 - **Keyboard Controls**: Arrow keys for intuitive control
+
+## ⚡ Why WebRTC?
+
+- **HLS (old)**: 2-10 seconds lag → Too slow for safe driving
+- **WebRTC (current)**: 0.2-0.5 seconds lag → Near-instant feedback like FPV drones
 
 ## 📁 Project Structure
 
 ```
 RC_Patrol/
 ├── arduino_servo_motor_control.ino  # Arduino firmware
-├── nginx_rtmp.conf                   # RTMP server config
-├── start_rtmp_server.sh              # Start streaming server
-├── stop_rtmp_server.sh               # Stop streaming server
+├── mediamtx.yml                      # MediaMTX WebRTC config
+├── start_all.sh                      # Start everything (recommended)
+├── stop_all.sh                       # Stop everything
+├── start_mediamtx.sh                 # Start MediaMTX only
+├── stop_mediamtx.sh                  # Stop MediaMTX only
+├── start_web_server.py               # Web interface server
 ├── web/
-│   └── index.html                    # Control interface
-├── hls/                              # HLS stream chunks (auto-generated)
+│   └── index.html                    # WebRTC control interface
+├── hls/                              # HLS fallback (optional)
 ├── logs/                             # Server logs
 └── recordings/                       # Optional stream recordings
 ```
@@ -73,21 +82,21 @@ RC_Patrol/
 
 5. Open Serial Monitor (115200 baud) and note the IP address (e.g., `192.168.1.42`)
 
-### 2. RTMP Server Setup
+### 2. MediaMTX WebRTC Server Setup
 
-The RTMP server is already installed and configured.
+MediaMTX is already installed and configured.
 
-1. **Start the server**:
+1. **Start all services** (recommended):
    ```bash
    cd "/Users/davidgu/Documents/GenAI Projects/RC_Patrol"
-   ./start_rtmp_server.sh
+   ./start_all.sh
    ```
 
-2. Note your Mac's IP address from the script output
+2. Note your Mac's IP address from the output (e.g., `192.168.12.40`)
 
-3. **Stop the server** when done:
+3. **Stop all services** when done:
    ```bash
-   ./stop_rtmp_server.sh
+   ./stop_all.sh
    ```
 
 ### 3. GoPro Hero 11 Setup
@@ -96,8 +105,8 @@ The RTMP server is already installed and configured.
 2. Select **Set Up New Platform**
 3. Choose **RTMP**
 4. Enter:
-   - **RTMP URL**: `rtmp://YOUR_MAC_IP:1935/live` (from start script)
-   - **Stream Key**: `stream`
+   - **RTMP URL**: `rtmp://YOUR_MAC_IP:1935/gopro` (from start_all.sh output)
+   - **Stream Key**: Leave empty (or use any value)
 5. Save and start streaming
 
 ### 4. Control Interface Setup
@@ -127,12 +136,13 @@ The RTMP server is already installed and configured.
 
 ## 📊 Features
 
-✅ **Live Video Streaming**: Low-latency GoPro feed  
+✅ **Ultra-Low Latency**: 0.2-0.5s WebRTC streaming (sub-second!)  
 ✅ **WiFi Control**: No cables needed for operation  
 ✅ **Keyboard & Touch Controls**: Flexible input methods  
 ✅ **Emergency Stop**: Instant safety cutoff  
 ✅ **Status Monitoring**: Real-time connection and vehicle status  
 ✅ **Responsive Design**: Works on desktop and tablets  
+✅ **Auto-reconnect**: Handles temporary disconnections  
 
 ## 🔍 Troubleshooting
 
@@ -144,10 +154,11 @@ The RTMP server is already installed and configured.
 
 ### GoPro Stream Not Showing
 - Verify GoPro is streaming (check GoPro screen)
-- Confirm RTMP URL matches your Mac's IP
-- Check nginx is running: `ps aux | grep nginx`
-- View logs: `cat logs/error.log`
-- Wait 10-15 seconds for HLS chunks to generate
+- Confirm RTMP URL: `rtmp://YOUR_MAC_IP:1935/gopro`
+- Check MediaMTX is running: `ps aux | grep mediamtx`
+- View logs: `cat logs/mediamtx.log`
+- Wait 5-10 seconds for WebRTC connection to establish
+- Try refreshing the browser
 
 ### ESC Not Responding
 - Calibrate ESC (see below)
@@ -170,10 +181,10 @@ The RTMP server is already installed and configured.
 - **WiFi protocol**: HTTP GET requests
 
 ### Video Streaming
-- **Protocol**: RTMP → HLS conversion
-- **Latency**: ~3-5 seconds (HLS buffering)
+- **Protocol**: RTMP (GoPro) → MediaMTX → WebRTC (Browser)
+- **Latency**: 0.2-0.5 seconds (WebRTC low-latency)
 - **Resolution**: GoPro default (1080p/4K depending on settings)
-- **Ports**: 1935 (RTMP), 8080 (HTTP/HLS)
+- **Ports**: 1935 (RTMP input), 8889 (WebRTC), 8080 (HTTP), 9997 (API)
 
 ## 🛡️ Safety Notes
 

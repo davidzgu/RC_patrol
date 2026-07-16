@@ -1,0 +1,81 @@
+# MediaMTX Configuration for RC Patrol
+# Optimized for low-latency WebRTC streaming from GoPro Hero 11
+
+###############################################
+# General settings
+###############################################
+
+# Log level: debug, info, warn, error
+logLevel: info
+logDestinations: [file]
+logFile: /Users/davidgu/Documents/GenAI Projects/RC_Patrol/logs/mediamtx.log
+
+# API for monitoring (optional)
+api: yes
+apiAddress: :9997
+
+###############################################
+# RTMP Server (receives GoPro stream)
+###############################################
+
+rtmp: yes
+rtmpAddress: :1935
+
+###############################################
+# WebRTC Server (serves to browser)
+###############################################
+
+webrtc: yes
+webrtcAddress: :8889
+webrtcICEServers2: []
+webrtcLocalUDPAddress: :8189
+webrtcLocalTCPAddress: :8189
+
+###############################################
+# HLS (keep for fallback compatibility)
+###############################################
+
+hls: yes
+hlsAddress: :8888
+hlsVariant: lowLatency
+hlsSegmentCount: 3
+hlsSegmentDuration: 500ms
+hlsPartDuration: 200ms
+
+###############################################
+# HTTP Server (web interface)
+###############################################
+
+# Serves web UI and handles WebRTC signaling
+webrtcAllowOrigins: ["*"]
+
+###############################################
+# Paths (stream endpoints)
+###############################################
+
+paths:
+  # Main stream from GoPro
+  gopro:
+    # Accept RTMP input from GoPro
+    source: publisher
+    
+    # Enable recording (optional)
+    # record: yes
+    # recordPath: /Users/davidgu/Documents/GenAI Projects/RC_Patrol/recordings/%path/%Y-%m-%d_%H-%M-%S
+    
+  # Accept any stream key (for flexibility)
+  all:
+    source: publisher
+
+###############################################
+# Performance tuning for low latency
+###############################################
+
+# Read timeout
+readTimeout: 10s
+
+# Write timeout  
+writeTimeout: 10s
+
+# Buffer sizes (smaller = lower latency)
+writeQueueSize: 1
