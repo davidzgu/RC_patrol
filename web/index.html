@@ -46,6 +46,14 @@
             height: 100%;
             object-fit: contain;
             background: #000;
+            display: none;  /* Hide WebRTC video when YOLO is active */
+        }
+        
+        #yoloCanvas {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+            background: #000;
         }
         
         .video-overlay {
@@ -93,6 +101,24 @@
             font-size: 12px;
             font-weight: bold;
             border: 2px solid #4CAF50;
+        }
+        
+        .detection-badge {
+            position: absolute;
+            top: 60px;
+            right: 20px;
+            background: rgba(255, 152, 0, 0.9);
+            padding: 8px 15px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: bold;
+            border: 2px solid #FF9800;
+        }
+        
+        #yoloCanvas {
+            position: absolute;
+            top: 0;
+            left: 0;
         }
         
         .control-panel {
@@ -244,12 +270,16 @@
         <div class="video-panel">
             <div class="video-container">
                 <video id="video" autoplay muted playsinline></video>
+                <canvas id="yoloCanvas"></canvas>
                 <div class="video-overlay">
                     <span class="status-dot offline" id="streamStatus"></span>
-                    <span id="streamText">Connecting to GoPro WebRTC...</span>
+                    <span id="streamText">Connecting to YOLO stream...</span>
                 </div>
                 <div class="latency-badge" id="latencyBadge" style="display:none;">
-                    ⚡ WebRTC &lt;500ms
+                    ⚡ YOLO Active
+                </div>
+                <div class="detection-badge" id="detectionBadge" style="display:none;">
+                    🎯 Objects: 0
                 </div>
             </div>
         </div>
@@ -358,83 +388,75 @@
             }
         });
         
-        // WebRTC stream using MediaMTX's WHEP protocol
-        const video = document.getElementById('video');
-        let pc = null;
+        // YOLO WebSocket stream
+        const canvas = document.getElementById('yoloCanvas');
+        const ctx = canvas.getContext('2d');
+        let ws = null;
         
-        async function startWebRTC() {
-            try {
-                // Create RTCPeerConnection
-                pc = new RTCPeerConnection({
-                    iceServers: []  // Local network, no STUN needed
-                });
-                
-                // Handle incoming tracks
-                pc.ontrack = (event) => {
-                    console.log('WebRTC track received:', event.track.kind);
-                    video.srcObject = event.streams[0];
-                    document.getElementById('streamStatus').className = 'status-dot live';
-                    document.getElementById('streamText').textContent = 'LIVE - GoPro WebRTC';
-                    document.getElementById('goProStatus').className = 'conn-dot connected';
-                    document.getElementById('latencyBadge').style.display = 'block';
-                };
-                
-                pc.oniceconnectionstatechange = () => {
-                    console.log('ICE connection state:', pc.iceConnectionState);
-                    if (pc.iceConnectionState === 'disconnected' || pc.iceConnectionState === 'failed') {
-                        document.getElementById('streamStatus').className = 'status-dot offline';
-                        document.getElementById('streamText').textContent = 'Stream disconnected';
-                        document.getElementById('goProStatus').className = 'conn-dot disconnected';
-                        document.getElementById('latencyBadge').style.display = 'none';
+        function connectYOLO() {
+            console.log('Connecting to YOLO WebSocket...');
+            ws = new WebSocket('ws://localhost:8765');
+            
+            ws.onopen = () => {
+                console.log('✅ Connected to YOLO server');
+                document.getElementById('streamStatus').className = 'status-dot live';
+                document.getElementById('streamText').textContent = 'LIVE - YOLO Detection';
+                document.getElementById('goProStatus').className = 'conn-dot connected';
+                document.getElementById('latencyBadge').style.display = 'block';
+                document.getElementById('detectionBadge').style.display = 'block';
+            };
+            
+            ws.onmessage = (event) => {
+                try {
+                    const data = JSON.parse(event.data);
+                    
+                    // Create image from base64
+                    const img = new Image();
+                    img.onload = () => {
+                        // Resize canvas to match image
+                        if (canvas.width !== img.width || canvas.height !== img.height) {
+                            canvas.width = img.width;
+                            canvas.height = img.height;
+                        }
                         
-                        // Retry after 3 seconds
-                        setTimeout(startWebRTC, 3000);
+                        // Draw image
+                        ctx.drawImage(img, 0, 0);
+                    };
+                    img.src = 'data:image/jpeg;base64,' + data.frame;
+                    
+                    // Update detection count
+                    const detectionCount = data.detections.length;
+                    document.getElementById('detectionBadge').textContent = `🎯 Objects: ${detectionCount}`;
+                    
+                    // Log detections (optional)
+                    if (detectionCount > 0) {
+                        console.log('Detections:', data.detections.map(d => d.class).join(', '));
                     }
-                };
-                
-                // Add transceiver for receiving video
-                pc.addTransceiver('video', { direction: 'recvonly' });
-                pc.addTransceiver('audio', { direction: 'recvonly' });
-                
-                // Create offer
-                const offer = await pc.createOffer();
-                await pc.setLocalDescription(offer);
-                
-                // Send offer to MediaMTX via WHEP
-                const response = await fetch('http://localhost:8889/gopro/whep', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/sdp'
-                    },
-                    body: offer.sdp
-                });
-                
-                if (!response.ok) {
-                    throw new Error(`WHEP request failed: ${response.status}`);
+                    
+                } catch (e) {
+                    console.error('Error parsing YOLO data:', e);
                 }
-                
-                // Set remote description from answer
-                const answer = await response.text();
-                await pc.setRemoteDescription(new RTCSessionDescription({
-                    type: 'answer',
-                    sdp: answer
-                }));
-                
-                console.log('WebRTC connection established!');
-                
-            } catch (error) {
-                console.error('WebRTC connection error:', error);
+            };
+            
+            ws.onerror = (error) => {
+                console.error('WebSocket error:', error);
+            };
+            
+            ws.onclose = () => {
+                console.log('❌ YOLO WebSocket closed, reconnecting...');
                 document.getElementById('streamStatus').className = 'status-dot offline';
-                document.getElementById('streamText').textContent = 'Waiting for GoPro stream...';
+                document.getElementById('streamText').textContent = 'Reconnecting to YOLO...';
                 document.getElementById('goProStatus').className = 'conn-dot disconnected';
+                document.getElementById('latencyBadge').style.display = 'none';
+                document.getElementById('detectionBadge').style.display = 'none';
                 
                 // Retry after 3 seconds
-                setTimeout(startWebRTC, 3000);
-            }
+                setTimeout(connectYOLO, 3000);
+            };
         }
         
-        // Initialize WebRTC stream
-        startWebRTC();
+        // Start YOLO stream instead of WebRTC
+        connectYOLO();
         
         // Periodic status update
         setInterval(updateStatus, 1000);
